@@ -1,10 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { UploadedImage, DeckSettings, GenerationProgress } from '../types';
-import { generateDeck, downloadCanvas, canvasToDataURL } from '../utils/imageProcessing';
+import { generateDeck, downloadCanvas, downloadCanvasAsJpeg, canvasToDataURL } from '../utils/imageProcessing';
+
+const PREVIEW_SCALE = 0.25; // Generate preview at 1/4 size for performance
 
 const DEFAULT_SETTINGS: DeckSettings = {
   deckSize: 52,
   aspectRatioTolerance: 0,
+  jpegQuality: 0.92,
 };
 
 const TEMPLATE_PATH = '/card_template.png';
@@ -18,6 +21,9 @@ export function useDeckGenerator() {
     total: 0,
     status: 'idle',
   });
+  const [pngSize, setPngSize] = useState<number>(0);
+  const [jpegSize, setJpegSize] = useState<number>(0);
+  const [cardPreviews, setCardPreviews] = useState<string[]>([]);
 
   const generatedCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const debounceRef = useRef<number | null>(null);
@@ -26,19 +32,29 @@ export function useDeckGenerator() {
     if (images.length === 0) {
       setPreviewUrl(null);
       setProgress({ current: 0, total: 0, status: 'idle' });
+      setPngSize(0);
+      setJpegSize(0);
+      setCardPreviews([]);
       return;
     }
 
     try {
-      const canvas = await generateDeck(
+      // Generate scaled preview for fast display
+      const result = await generateDeck(
         TEMPLATE_PATH,
         images,
         settings,
-        setProgress
+        setProgress,
+        { scale: PREVIEW_SCALE }
       );
 
-      generatedCanvasRef.current = canvas;
-      setPreviewUrl(canvasToDataURL(canvas));
+      generatedCanvasRef.current = null; // Clear cached full-size canvas
+      setPreviewUrl(canvasToDataURL(result.canvas));
+      setCardPreviews([]); // Card previews only generated at full scale
+
+      // Estimate file sizes based on scaled preview
+      setPngSize(0);
+      setJpegSize(0);
     } catch (error) {
       console.error('Failed to generate deck:', error);
       setProgress({
@@ -89,11 +105,47 @@ export function useDeckGenerator() {
     setSettings(newSettings);
   }, []);
 
-  const download = useCallback(() => {
+  const generateFullSize = useCallback(async (): Promise<HTMLCanvasElement | null> => {
+    if (images.length === 0) return null;
+
+    // Use cached full-size canvas if available
     if (generatedCanvasRef.current) {
-      downloadCanvas(generatedCanvasRef.current, 'card_deck.png');
+      return generatedCanvasRef.current;
     }
-  }, []);
+
+    setProgress({
+      current: 0,
+      total: settings.deckSize,
+      status: 'generating',
+      message: 'Generating full-size deck...',
+    });
+
+    const result = await generateDeck(
+      TEMPLATE_PATH,
+      images,
+      settings,
+      setProgress,
+      { scale: 1 }
+    );
+
+    generatedCanvasRef.current = result.canvas;
+    setCardPreviews(result.cardPreviews);
+    return result.canvas;
+  }, [images, settings]);
+
+  const download = useCallback(async () => {
+    const canvas = await generateFullSize();
+    if (canvas) {
+      downloadCanvas(canvas, 'card_deck.png');
+    }
+  }, [generateFullSize]);
+
+  const downloadJpeg = useCallback(async () => {
+    const canvas = await generateFullSize();
+    if (canvas) {
+      downloadCanvasAsJpeg(canvas, 'card_deck.jpg', settings.jpegQuality);
+    }
+  }, [generateFullSize, settings.jpegQuality]);
 
   // Cleanup object URLs on unmount
   useEffect(() => {
@@ -110,10 +162,14 @@ export function useDeckGenerator() {
     settings,
     previewUrl,
     progress,
+    pngSize,
+    jpegSize,
+    cardPreviews,
     addImages,
     removeImage,
     reorderImages,
     updateSettings,
     download,
+    downloadJpeg,
   };
 }

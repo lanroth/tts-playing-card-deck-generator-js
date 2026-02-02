@@ -1,137 +1,115 @@
-# tts-playing-card-deck-generator
+# TTS Playing Card Deck Generator
 
-This script turns a set of image
-files into a Tabletop Simulator compatible deck of
-regular playing cards. 
+A web application that turns a set of images into a Tabletop Simulator compatible deck of playing cards.
 
-Each card in the deck is composed of a user specified source image and
-the card value (ace of spaces, 5 of diamonds etc).
+Each card in the deck is composed of a user-specified source image and the card value (ace of spades, 5 of diamonds, etc).
 
-## Installation
+> This React web app was vibe coded from the original Python CLI tool.
 
-```commandline
-git clone https://github.com/lanroth/tts-playing-card-deck-generator.git
-cd tts-playing-card-deck-generator
-pip3 install -r requirements.txt
-```
+## Live Demo
 
-## Quickstart
+Try it online: [https://lanroth.github.io/tts-playing-card-deck-generator/](https://lanroth.github.io/tts-playing-card-deck-generator/)
 
-To recreate the sample [card_deck.png](card_deck.png) deck:
+## Usage
 
-```commandline
-python3 create_tts_deck.py card_faces/hubble_space_pictures
-```
+1. Open the web app in your browser
+2. Upload your images using the image uploader
+3. Configure deck settings as needed:
+   - **Deck Size**: Choose between 52 or 54 cards
+   - **Hidden Card**: Optionally set a specific image for the hidden card face
+4. Preview the generated deck
+5. Download the final deck image
+
+## Importing into Tabletop Simulator
 
 From within Tabletop Simulator:
 
-1. Click the Objects button at the top:  
+1. Click the Objects button at the top:
    ![Objects button](doc/objects_button.jpg)
-2. Click components:  
+2. Click Components:
    ![Components button](doc/components.jpg)
-3. Click Custom:  
+3. Click Custom:
    ![Custom button](doc/custom_button.jpg)
-4. Click Deck:  
+4. Click Deck:
    ![Deck button](doc/deck_button.jpg)
-5. Fill in the dialog:  
+5. Fill in the dialog:
    ![Custom button dialog](doc/custom_deck_dialog.jpg)
-  - For `Face` browse to the generated image, e.g. `card_deck.png` and upload to `Cloud`.
-  - For `Back` browse to an image you'd like for the back of the playing cards and upload to `Cloud`.
-  - Click the `IMPORT` button.
+   - For `Face` browse to the generated image and upload to `Cloud`
+   - For `Back` browse to an image you'd like for the back of the playing cards and upload to `Cloud`
+   - Click the `IMPORT` button
 
 I recommend saving the generated deck for easy access:
 
 1. Right click on the deck
 2. Save object
-3. Give it a meaningful name (e.g. Hubble space cards) and click Save. 
+3. Give it a meaningful name and click Save
 
-## Detailed usage
+## Development
 
-```commandline
-usage: create_tts_deck.py [-h] [-t TEMPLATE] [-o OUT] [-r] [-a ASPECT_RATIO_TOLERANCE] [-H HIDDEN_CARD] [--display-deck] [--deck-size DECK_SIZE] [-d] input [input ...]
+### Prerequisites
 
-create Tabletop Simulator compatible card deck from template and image files
+- Node.js 20 or later
+- npm
 
-positional arguments:
-  input                 files and directories to look for source images
+### Installation
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -t TEMPLATE, --template TEMPLATE
-                        deck template image (default: card_template.png)
-  -o OUT, --out OUT     the generated image file to write (default: card_deck.png)
-  -r, --recursive       recurse directories when looking for source images (default: False)
-  -a ASPECT_RATIO_TOLERANCE, --aspect-ratio-tolerance ASPECT_RATIO_TOLERANCE
-                        1 = aspect ratios must be exact match, 0 = any aspect ratio (default: 0)
-  -H HIDDEN_CARD, --hidden-card HIDDEN_CARD
-                        image to use for the face of a card that is hidden (default: None)
-  --display-deck        display the generated deck image on screen (default: False)
-  --deck-size DECK_SIZE
-                        number of cards in deck (default: 52)
-  -d, --debug           print lots of debug output (default: False)
+```bash
+git clone https://github.com/lanroth/tts-playing-card-deck-generator.git
+cd tts-playing-card-deck-generator
+npm install
 ```
 
-### Hidden card
+### Running Locally
 
-Tabletop Simulator uses the card in the bottom right of the card sheet for it's hidden card (see [here](https://kb.tabletopsimulator.com/custom-content/custom-deck/#deck-features)). The `-H` argument allows you to specify an image to use for this.
-
-> to keep the hidden card unique, it's best to place the hidden card in a separate director rather than mix it in with all the other card images 
-
-### Aspect ratio tolerance
-
-The `-a` argument allows you to ignore source images that aren't of a similar aspect ratio to a playing card:
-
-- `-a0`: allow any aspect ratio
-- `-a0.5`: allow aspect ratio of source image to be within 50% of the aspect ratio of a card
-- `-a1`: aspect ratios must be exactly the same 
-
-## Why I wrote this
-
-I play card games online with my friends and wanted
-to be able to change the faces of the cards as easily as
-possible.
-
-There are existing tools to help with this (e.g. the official
-[Deck Builder](https://kb.tabletopsimulator.com/custom-content/custom-deck/#deck-builder))
-but they require a lot of work to achieve these results.
-
-If I'm going to play cards with a group of friends I've been on holiday with I can quickly
-generate a deck for the occasion:
-
-```commandline
-create_tts_deck.py "My Photos/Holiday on the Sea of Tranquillity"
+```bash
+npm run dev
 ```
 
-## How it works
+This starts the development server. Open the URL shown in your terminal (usually <http://localhost:5173>).
 
-Tabletop Simulator expects a card deck to be a single 
-image composed of a grid of 10 x 7 cards. 
+### Building for Production
 
-Here is a card deck from Tabletop Simulator:
+```bash
+npm run build
+```
+
+The built files will be in the `dist` directory.
+
+### Preview Production Build
+
+```bash
+npm run preview
+```
+
+## How It Works
+
+Tabletop Simulator expects a card deck to be a single image composed of a grid of 10 x 7 cards.
+
+Here is a card deck template from Tabletop Simulator:
 
 ![](card_template.png)
 
-Roughly speaking, for each card in this grid the script:
+For each card in this grid, the application:
 
-1. Reads the card
+1. Reads the card template
 2. Extracts the number and suit from the corners
-3. Reads an image provided from the command line
-4. scales and crops this image to a card size
-5. pastes the number and suit into the corners
-6. writes the image into the grid.
+3. Takes an uploaded image
+4. Scales and crops this image to card size
+5. Pastes the number and suit into the corners
+6. Writes the image into the grid
 
-The resulting image is written to [card_deck.png](card_deck.png) by default.
+The resulting image can be downloaded as a PNG file.
 
-The result of executing
+## Why This Exists
 
-```commandline
-python3 create_tts_deck.py card_faces/hubble_space_pictures
-```
+I play card games online with friends and wanted to be able to change the faces of the cards as easily as possible.
 
-is: ![card_deck.png](card_deck.png)
+There are existing tools to help with this (e.g. the official [Deck Builder](https://kb.tabletopsimulator.com/custom-content/custom-deck/#deck-builder)) but they require a lot of work to achieve these results.
 
-## Included source images
+This tool makes it quick and easy to generate a custom deck from any collection of images.
 
-The source images Included in this repo are from here:
+## Included Source Images
+
+The sample images included in this repo are from:
 
 https://esahubble.org/products/media/hst_media_0017/

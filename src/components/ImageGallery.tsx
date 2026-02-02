@@ -5,6 +5,7 @@ interface ImageGalleryProps {
   deckSize: number;
   onRemoveImage: (id: string) => void;
   onReorderImages: (images: UploadedImage[]) => void;
+  onImageClick: (imageUrl: string, imageId: string) => void;
 }
 
 export function ImageGallery({
@@ -12,6 +13,7 @@ export function ImageGallery({
   deckSize,
   onRemoveImage,
   onReorderImages,
+  onImageClick,
 }: ImageGalleryProps) {
   const handleDragStart = (e: React.DragEvent, index: number) => {
     e.dataTransfer.setData('text/plain', index.toString());
@@ -64,9 +66,10 @@ export function ImageGallery({
             onDrop={(e) => handleDrop(e, index)}
           >
             <img
-              src={image.preview}
+              src={image.thumbnail}
               alt={image.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover cursor-pointer"
+              onClick={() => onImageClick(image.preview, image.id)}
             />
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <button

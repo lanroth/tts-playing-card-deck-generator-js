@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { UploadedImage } from '../types';
+import { createThumbnail } from '../utils/imageProcessing';
 
 interface ImageUploaderProps {
   onImagesAdded: (images: UploadedImage[]) => void;
@@ -8,19 +9,22 @@ interface ImageUploaderProps {
 export function ImageUploader({ onImagesAdded }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
 
-  const processFiles = useCallback((files: FileList | null) => {
+  const processFiles = useCallback(async (files: FileList | null) => {
     if (!files) return;
 
     const imageFiles = Array.from(files).filter(file =>
       file.type.startsWith('image/')
     );
 
-    const newImages: UploadedImage[] = imageFiles.map(file => ({
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      file,
-      preview: URL.createObjectURL(file),
-      name: file.name,
-    }));
+    const newImages: UploadedImage[] = await Promise.all(
+      imageFiles.map(async (file) => ({
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        file,
+        preview: URL.createObjectURL(file),
+        thumbnail: await createThumbnail(file),
+        name: file.name,
+      }))
+    );
 
     onImagesAdded(newImages);
   }, [onImagesAdded]);

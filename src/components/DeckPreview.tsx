@@ -1,11 +1,51 @@
-import { GenerationProgress } from '../types';
+import { useRef } from 'react';
+import { GenerationProgress, UploadedImage } from '../types';
+import { COLS, ROWS } from '../utils/cardUtils';
 
 interface DeckPreviewProps {
   previewUrl: string | null;
   progress: GenerationProgress;
+  images: UploadedImage[];
+  deckSize: number;
+  onCardClick: (imageUrl: string, imageId: string) => void;
 }
 
-export function DeckPreview({ previewUrl, progress }: DeckPreviewProps) {
+export function DeckPreview({ previewUrl, progress, images, deckSize, onCardClick }: DeckPreviewProps) {
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!imgRef.current || images.length === 0) return;
+
+    const rect = imgRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Calculate the scale factor (displayed size vs natural size)
+    const scaleX = imgRef.current.naturalWidth / rect.width;
+    const scaleY = imgRef.current.naturalHeight / rect.height;
+
+    // Convert click position to natural image coordinates
+    const naturalX = clickX * scaleX;
+    const naturalY = clickY * scaleY;
+
+    // Calculate card dimensions in the grid
+    const cardWidth = imgRef.current.naturalWidth / COLS;
+    const cardHeight = imgRef.current.naturalHeight / ROWS;
+
+    // Determine which card was clicked
+    const col = Math.floor(naturalX / cardWidth);
+    const row = Math.floor(naturalY / cardHeight);
+    const cardIndex = row * COLS + col;
+
+    // Only respond to clicks on actual cards (within deckSize)
+    if (cardIndex < deckSize) {
+      // Map card index to the original image (cards cycle through images)
+      const imageIndex = cardIndex % images.length;
+      const image = images[imageIndex];
+      onCardClick(image.preview, image.id);
+    }
+  };
+
   return (
     <div className="bg-slate-100 rounded-lg p-4 h-full flex flex-col">
       <h3 className="font-semibold text-slate-700 mb-2">Deck Preview</h3>
@@ -46,9 +86,11 @@ export function DeckPreview({ previewUrl, progress }: DeckPreviewProps) {
       {(progress.status === 'idle' || progress.status === 'complete') && previewUrl && (
         <div className="flex-1 overflow-auto">
           <img
+            ref={imgRef}
             src={previewUrl}
             alt="Deck preview"
-            className="w-full rounded border border-slate-200"
+            className="w-full rounded border border-slate-200 cursor-pointer"
+            onClick={handleImageClick}
           />
         </div>
       )}

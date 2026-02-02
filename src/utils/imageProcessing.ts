@@ -17,6 +17,39 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+const THUMBNAIL_MAX_WIDTH = 200;
+const THUMBNAIL_MAX_HEIGHT = 280;
+
+export async function createThumbnail(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(
+        THUMBNAIL_MAX_WIDTH / img.width,
+        THUMBNAIL_MAX_HEIGHT / img.height,
+        1 // Don't upscale small images
+      );
+
+      const width = Math.round(img.width * scale);
+      const height = Math.round(img.height * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      URL.revokeObjectURL(img.src);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error('Failed to load image for thumbnail'));
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export function getCardFromTemplate(
   templateCanvas: HTMLCanvasElement,
   pos: number
@@ -103,13 +136,49 @@ export function compositeOverlay(
   return baseCanvas;
 }
 
+export function compositeOverlayScaled(
+  baseCanvas: HTMLCanvasElement,
+  overlayImageData: ImageData,
+  targetWidth: number,
+  targetHeight: number
+): HTMLCanvasElement {
+  const ctx = baseCanvas.getContext('2d')!;
+
+  // Create a temporary canvas for the overlay at original size
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width = overlayImageData.width;
+  overlayCanvas.height = overlayImageData.height;
+  const overlayCtx = overlayCanvas.getContext('2d')!;
+  overlayCtx.putImageData(overlayImageData, 0, 0);
+
+  // Draw overlay scaled to target size
+  ctx.drawImage(overlayCanvas, 0, 0, targetWidth, targetHeight);
+
+  return baseCanvas;
+}
+
+export interface DeckGenerationResult {
+  canvas: HTMLCanvasElement;
+  cardPreviews: string[]; // Data URLs for each unique card (one per uploaded image)
+}
+
+export interface GenerateDeckOptions {
+  scale?: number; // 1 = full size, 0.25 = quarter size for preview
+}
+
 export async function generateDeck(
   templateSrc: string,
   images: UploadedImage[],
   settings: DeckSettings,
-  onProgress?: (progress: GenerationProgress) => void
-): Promise<HTMLCanvasElement> {
+  onProgress?: (progress: GenerationProgress) => void,
+  options: GenerateDeckOptions = {}
+): Promise<DeckGenerationResult> {
+  const { scale = 1 } = options;
   const dims = getCardDimensions();
+  const scaledDeckWidth = Math.round(DECK_WIDTH * scale);
+  const scaledDeckHeight = Math.round(DECK_HEIGHT * scale);
+  const scaledCardWidth = Math.round(dims.cardWidth * scale);
+  const scaledCardHeight = Math.round(dims.cardHeight * scale);
 
   // Report loading status
   onProgress?.({
@@ -122,27 +191,27 @@ export async function generateDeck(
   // Load template image
   const templateImg = await loadImage(templateSrc);
 
-  // Create template canvas
+  // Create template canvas at full size (needed for overlay extraction)
   const templateCanvas = document.createElement('canvas');
   templateCanvas.width = DECK_WIDTH;
   templateCanvas.height = DECK_HEIGHT;
   const templateCtx = templateCanvas.getContext('2d')!;
   templateCtx.drawImage(templateImg, 0, 0, DECK_WIDTH, DECK_HEIGHT);
 
-  // Create output canvas
+  // Create output canvas at scaled size
   const outputCanvas = document.createElement('canvas');
-  outputCanvas.width = DECK_WIDTH;
-  outputCanvas.height = DECK_HEIGHT;
+  outputCanvas.width = scaledDeckWidth;
+  outputCanvas.height = scaledDeckHeight;
   const outputCtx = outputCanvas.getContext('2d')!;
 
-  // Copy template to output first
-  outputCtx.drawImage(templateCanvas, 0, 0);
+  // Copy template to output (scaled)
+  outputCtx.drawImage(templateCanvas, 0, 0, scaledDeckWidth, scaledDeckHeight);
 
   if (images.length === 0) {
-    return outputCanvas;
+    return { canvas: outputCanvas, cardPreviews: [] };
   }
 
-  // Load all user images
+  // Load all user images (use thumbnails for scaled preview, full images for full size)
   onProgress?.({
     current: 0,
     total: settings.deckSize,
@@ -151,8 +220,11 @@ export async function generateDeck(
   });
 
   const loadedImages = await Promise.all(
-    images.map(img => loadImage(img.preview))
+    images.map(img => loadImage(scale < 1 ? img.thumbnail : img.preview))
   );
+
+  // Store card previews for each unique image (first occurrence of each)
+  const cardPreviews: string[] = new Array(images.length).fill('');
 
   // Generate each card
   for (let i = 0; i < settings.deckSize; i++) {
@@ -163,30 +235,40 @@ export async function generateDeck(
       message: `Generating card ${i + 1}/${settings.deckSize}`,
     });
 
-    // Get card overlay from template
+    // Get card overlay from template (at full size, then scale)
     const cardImageData = getCardFromTemplate(templateCanvas, i);
     const overlayImageData = extractCardNumberOverlay(cardImageData);
 
     // Get user image (cycle through if fewer images than cards)
-    const userImage = loadedImages[i % loadedImages.length];
+    const imageIndex = i % loadedImages.length;
+    const userImage = loadedImages[imageIndex];
 
-    // Resize and crop user image to card size
-    const cardCanvas = resizeAndCrop(userImage, dims.cardWidth, dims.cardHeight);
+    // Resize and crop user image to scaled card size
+    const cardCanvas = resizeAndCrop(userImage, scaledCardWidth, scaledCardHeight);
 
-    // Composite overlay on top
-    compositeOverlay(cardCanvas, overlayImageData);
+    // Composite scaled overlay on top
+    compositeOverlayScaled(cardCanvas, overlayImageData, scaledCardWidth, scaledCardHeight);
 
-    // Place card in output grid
-    const { x, y } = getCardPosition(i);
-    outputCtx.drawImage(cardCanvas, x, y);
+    // Save the first card preview for each unique image (only at full scale)
+    if (scale === 1 && cardPreviews[imageIndex] === '') {
+      cardPreviews[imageIndex] = cardCanvas.toDataURL('image/png');
+    }
+
+    // Place card in output grid (scaled position)
+    const pos = getCardPosition(i);
+    const scaledX = Math.round(pos.x * scale);
+    const scaledY = Math.round(pos.y * scale);
+    outputCtx.drawImage(cardCanvas, scaledX, scaledY);
   }
 
   // Handle hidden card (position 69 - last position in the grid)
   if (settings.hiddenCardImage) {
-    const hiddenImg = await loadImage(settings.hiddenCardImage.preview);
-    const hiddenCanvas = resizeAndCrop(hiddenImg, dims.cardWidth, dims.cardHeight);
-    const { x, y } = getCardPosition(69);
-    outputCtx.drawImage(hiddenCanvas, x, y);
+    const hiddenImg = await loadImage(scale < 1 ? settings.hiddenCardImage.thumbnail : settings.hiddenCardImage.preview);
+    const hiddenCanvas = resizeAndCrop(hiddenImg, scaledCardWidth, scaledCardHeight);
+    const pos = getCardPosition(69);
+    const scaledX = Math.round(pos.x * scale);
+    const scaledY = Math.round(pos.y * scale);
+    outputCtx.drawImage(hiddenCanvas, scaledX, scaledY);
   }
 
   onProgress?.({
@@ -196,7 +278,7 @@ export async function generateDeck(
     message: 'Deck generated!',
   });
 
-  return outputCanvas;
+  return { canvas: outputCanvas, cardPreviews };
 }
 
 export function downloadCanvas(canvas: HTMLCanvasElement, filename: string): void {
@@ -206,6 +288,21 @@ export function downloadCanvas(canvas: HTMLCanvasElement, filename: string): voi
   link.click();
 }
 
+export function downloadCanvasAsJpeg(canvas: HTMLCanvasElement, filename: string, quality: number): void {
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = canvas.toDataURL('image/jpeg', quality);
+  link.click();
+}
+
 export function canvasToDataURL(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL('image/png');
+}
+
+export async function getCanvasFileSize(canvas: HTMLCanvasElement, type: 'image/png' | 'image/jpeg', quality?: number): Promise<number> {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(blob?.size ?? 0);
+    }, type, quality);
+  });
 }

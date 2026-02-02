@@ -1,4 +1,5 @@
 import { DeckSettings, UploadedImage } from '../types';
+import { createThumbnail } from '../utils/imageProcessing';
 
 interface SettingsPanelProps {
   settings: DeckSettings;
@@ -17,13 +18,14 @@ export function SettingsPanel({ settings, onSettingsChange }: SettingsPanelProps
     onSettingsChange({ ...settings, aspectRatioTolerance: value });
   };
 
-  const handleHiddenCardChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleHiddenCardChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const hiddenCardImage: UploadedImage = {
         id: `hidden-${Date.now()}`,
         file,
         preview: URL.createObjectURL(file),
+        thumbnail: await createThumbnail(file),
         name: file.name,
       };
       onSettingsChange({ ...settings, hiddenCardImage });
@@ -97,7 +99,7 @@ export function SettingsPanel({ settings, onSettingsChange }: SettingsPanelProps
         {settings.hiddenCardImage ? (
           <div className="flex items-center gap-2">
             <img
-              src={settings.hiddenCardImage.preview}
+              src={settings.hiddenCardImage.thumbnail}
               alt="Hidden card"
               className="w-12 h-16 object-cover rounded"
             />
