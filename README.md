@@ -8,7 +8,7 @@ Each card in the deck is composed of a user-specified source image and the card 
 
 ## Live Demo
 
-Try it online: [https://lanroth.github.io/tts-playing-card-deck-generator/](https://lanroth.github.io/tts-playing-card-deck-generator/)
+Try it online: [https://lanroth.github.io/tts-playing-card-deck-generator-js/](https://lanroth.github.io/tts-playing-card-deck-generator-js/)
 
 ## Usage
 
@@ -54,8 +54,8 @@ I recommend saving the generated deck for easy access:
 ### Installation
 
 ```bash
-git clone https://github.com/lanroth/tts-playing-card-deck-generator.git
-cd tts-playing-card-deck-generator
+git clone https://github.com/lanroth/tts-playing-card-deck-generator-js.git
+cd tts-playing-card-deck-generator-js
 npm install
 ```
 
